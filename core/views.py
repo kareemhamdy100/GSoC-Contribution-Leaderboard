@@ -76,6 +76,7 @@ def getOrganizationContributors(repoList):
 
 # TODO make refactor to this function
 def updateDataBase(repos):
+    gsoc_students = list(User.objects.filter(gsoc=True))
     for repo_ in repos:
         print(repo_ + "->" + str(datetime.datetime.now()))
         curreRepo = Repository.objects.get(repo=repo_)
@@ -96,6 +97,9 @@ def updateDataBase(repos):
                 currRelation.totalMergedPRs = repos[repo_][user]['merged_prs']
                 currRelation.totalIssues = repos[repo_][user]['issue_counts']
                 currRelation.save()
+            # to handle edge case  when user have 1 only pr or issue and  issue closed or pr accepted
+            gsoc_students.remove(currUser)
+        Repository.users.through.objects.filter(repo=curreRepo, user__in=gsoc_students).delete()
 
     print('finish update database' + "->" + str(datetime.datetime.now()))
 
@@ -213,7 +217,7 @@ def showGsocUser(request):
         lastUpdated = LastUpdate.objects.get(pk=1).updated
     else:
         lastUpdated = ''
-    data = sortUser(Relation.objects, sort)
+    data = sort_students(Relation.objects, sort)
 
     context = {
         'users': data,
@@ -222,8 +226,8 @@ def showGsocUser(request):
     return render(request, 'core/gsoclist.html', context)
 
 
-def sortUser(_User, key):
-    all_list = _User.filter(user__gsoc=True).extra(select={'count': 'totalOpenPRs + totalMergedPRs'}).values(
+def sort_students(students, key):
+    all_list = students.filter(user__gsoc=True).values(
         'user__login', 'user__id', 'user__avatar',
         'user__gsoc').annotate(Sum('totalIssues'),
                                Sum('totalOpenPRs'),
@@ -235,5 +239,4 @@ def sortUser(_User, key):
     if key == 'c':
         return all_list.order_by('-totalMergedPRs__sum')
     # defalut case for gsoc
-    return all_list.order_by('-count', )
-
+    return all_list.order_by('-totalMergedPRs__sum')
